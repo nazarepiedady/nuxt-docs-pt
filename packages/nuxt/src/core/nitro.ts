@@ -5,10 +5,9 @@ import type { NitroConfig, Nitro } from 'nitropack'
 import type { Nuxt } from '@nuxt/schema'
 import { logger, resolvePath } from '@nuxt/kit'
 import escapeRE from 'escape-string-regexp'
-import defu from 'defu'
+import { defu } from 'defu'
 import fsExtra from 'fs-extra'
 import { dynamicEventHandler } from 'h3'
-import type { Plugin } from 'rollup'
 import { createHeadCore } from 'unhead'
 import { renderSSRHead } from '@unhead/ssr'
 import { distDir } from '../dirs'
@@ -17,6 +16,18 @@ import { ImportProtectionPlugin } from './plugins/import-protection'
 export async function initNitro (nuxt: Nuxt & { _nitro?: Nitro }) {
   // Resolve config
   const _nitroConfig = ((nuxt.options as any).nitro || {}) as NitroConfig
+
+  const excludePaths = nuxt.options._layers
+    .flatMap(l => [
+      l.cwd.match(/(?<=\/)node_modules\/(.+)$/)?.[1],
+      l.cwd.match(/\.pnpm\/.+\/node_modules\/(.+)$/)?.[1]
+    ])
+    .filter((dir): dir is string => Boolean(dir))
+    .map(dir => escapeRE(dir))
+  const excludePattern = excludePaths.length
+    ? [new RegExp(`node_modules\\/(?!${excludePaths.join('|')})`)]
+    : [/node_modules/]
+
   const nitroConfig: NitroConfig = defu(_nitroConfig, <NitroConfig>{
     debug: nuxt.options.debug,
     rootDir: nuxt.options.rootDir,
@@ -36,14 +47,11 @@ export async function initNitro (nuxt: Nuxt & { _nitro?: Nitro }) {
           name: 'publicAssetsURL',
           from: resolve(distDir, 'core/runtime/nitro/paths')
         }
-      ]
+      ],
+      exclude: [...excludePattern, /[\\/]\.git[\\/]/]
     },
     esbuild: {
-      options: {
-        exclude: [
-          new RegExp(`node_modules\\/(?!${nuxt.options._layers.map(l => l.cwd.match(/(?<=\/)node_modules\/(.+)$/)?.[1]).filter(Boolean).map(dir => escapeRE(dir!)).join('|')})`)
-        ]
-      }
+      options: { exclude: excludePattern }
     },
     analyze: nuxt.options.build.analyze && {
       template: 'treemap',
@@ -166,7 +174,7 @@ export async function initNitro (nuxt: Nuxt & { _nitro?: Nitro }) {
           .map(p => [p, 'Vue app aliases are not allowed in server routes.']) as [RegExp | string, string][]
       ],
       exclude: [/core[\\/]runtime[\\/]nitro[\\/]renderer/]
-    }) as Plugin
+    })
   )
 
   // Extend nitro config with hook
