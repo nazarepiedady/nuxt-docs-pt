@@ -19,10 +19,10 @@ import { defineNuxtCommand } from './index'
 export default defineNuxtCommand({
   meta: {
     name: 'dev',
-    usage: 'npx nuxi dev [rootDir] [--dotenv] [--clipboard] [--open, -o] [--port, -p] [--host, -h] [--https] [--ssl-cert] [--ssl-key]',
+    usage: 'npx nuxi dev [rootDir] [--dotenv] [--log-level] [--clipboard] [--open, -o] [--port, -p] [--host, -h] [--https] [--ssl-cert] [--ssl-key]',
     description: 'Run nuxt development server'
   },
-  async invoke (args) {
+  async invoke (args, options = {}) {
     overrideEnv('development')
 
     const { listen } = await import('listhen')
@@ -48,7 +48,11 @@ export default defineNuxtCommand({
 
     const config = await loadNuxtConfig({
       cwd: rootDir,
-      overrides: { dev: true }
+      overrides: {
+        dev: true,
+        logLevel: args['log-level'],
+        ...(options.overrides || {})
+      }
     })
 
     const listener = await listen(serverHandler, {
@@ -66,6 +70,8 @@ export default defineNuxtCommand({
     })
 
     let currentNuxt: Nuxt
+    let distWatcher: chokidar.FSWatcher
+
     const showURL = () => {
       listener.showURL({
         // TODO: Normalize URL with trailing slash within schema
@@ -82,10 +88,40 @@ export default defineNuxtCommand({
         if (currentNuxt) {
           await currentNuxt.close()
         }
-        currentNuxt = await loadNuxt({ rootDir, dev: true, ready: false })
+        if (distWatcher) {
+          await distWatcher.close()
+        }
+
+        currentNuxt = await loadNuxt({
+          rootDir,
+          dev: true,
+          ready: false,
+          overrides: {
+            logLevel: args['log-level'],
+            ...(options.overrides || {})
+          }
+        })
+
+        currentNuxt.hooks.hookOnce('restart', async (options) => {
+          if (options?.hard && process.send) {
+            await listener.close().catch(() => {})
+            await currentNuxt.close().catch(() => {})
+            await watcher.close().catch(() => {})
+            await distWatcher.close().catch(() => {})
+            process.send({ type: 'nuxt:restart' })
+          } else {
+            await load(true)
+          }
+        })
+
         if (!isRestart) {
           showURL()
         }
+
+        distWatcher = chokidar.watch(resolve(currentNuxt.options.buildDir, 'dist'), { ignoreInitial: true, depth: 0 })
+        distWatcher.on('unlinkDir', () => {
+          dLoad(true, '.nuxt/dist directory has been removed')
+        })
 
         // Write manifest and also check if we need cache invalidation
         if (!isRestart) {
@@ -99,7 +135,7 @@ export default defineNuxtCommand({
         await currentNuxt.ready()
 
         await currentNuxt.hooks.callHook('listen', listener.server, listener)
-        const address = listener.server.address() as AddressInfo
+        const address = (listener.server.address() || {}) as AddressInfo
         currentNuxt.options.devServer.url = listener.url
         currentNuxt.options.devServer.port = address.port
         currentNuxt.options.devServer.host = address.address
