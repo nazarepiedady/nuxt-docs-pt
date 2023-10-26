@@ -1,7 +1,7 @@
+import { pathToFileURL } from 'node:url'
 import { readPackageJSON, resolvePackageJSON } from 'pkg-types'
 import type { Nuxt } from '@nuxt/schema'
-import type { RequireModuleOptions } from '../internal/cjs'
-import { importModule, tryImportModule } from '../internal/cjs'
+import { importModule, tryImportModule } from '../internal/esm'
 import type { LoadNuxtConfigOptions } from './config'
 
 export interface LoadNuxtOptions extends LoadNuxtConfigOptions {
@@ -23,12 +23,10 @@ export async function loadNuxt (opts: LoadNuxtOptions): Promise<Nuxt> {
   opts.cwd = opts.cwd || opts.rootDir
   opts.overrides = opts.overrides || opts.config || {}
 
-  const resolveOpts: RequireModuleOptions = { paths: opts.cwd }
-
   // Apply dev as config override
   opts.overrides.dev = !!opts.dev
 
-  const nearestNuxtPkg = await Promise.all(['nuxt3', 'nuxt', 'nuxt-edge']
+  const nearestNuxtPkg = await Promise.all(['nuxt-nightly', 'nuxt3', 'nuxt', 'nuxt-edge']
     .map(pkg => resolvePackageJSON(pkg, { url: opts.cwd }).catch(() => null)))
     .then(r => (r.filter(Boolean) as string[]).sort((a, b) => b.length - a.length)[0])
   if (!nearestNuxtPkg) {
@@ -37,15 +35,17 @@ export async function loadNuxt (opts: LoadNuxtOptions): Promise<Nuxt> {
   const pkg = await readPackageJSON(nearestNuxtPkg)
   const majorVersion = parseInt((pkg.version || '').split('.')[0])
 
+  const rootDir = pathToFileURL(opts.cwd || process.cwd()).href
+
   // Nuxt 3
   if (majorVersion === 3) {
-    const { loadNuxt } = await importModule((pkg as any)._name || pkg.name, resolveOpts)
+    const { loadNuxt } = await importModule((pkg as any)._name || pkg.name, rootDir)
     const nuxt = await loadNuxt(opts)
     return nuxt
   }
 
   // Nuxt 2
-  const { loadNuxt } = await tryImportModule('nuxt-edge', resolveOpts) || await importModule('nuxt', resolveOpts)
+  const { loadNuxt } = await tryImportModule('nuxt-edge', rootDir) || await importModule('nuxt', rootDir)
   const nuxt = await loadNuxt({
     rootDir: opts.cwd,
     for: opts.dev ? 'dev' : 'build',
@@ -54,19 +54,32 @@ export async function loadNuxt (opts: LoadNuxtOptions): Promise<Nuxt> {
     envConfig: opts.dotenv // TODO: Backward format conversion
   })
 
+  // Mock new hookable methods
+  nuxt.removeHook ||= nuxt.clearHook.bind(nuxt)
+  nuxt.removeAllHooks ||= nuxt.clearHooks.bind(nuxt)
+  nuxt.hookOnce ||= (name: string, fn: (...args: any[]) => any, ...hookArgs: any[]) => {
+    const unsub = nuxt.hook(name, (...args: any[]) => {
+      unsub()
+      return fn(...args)
+    }, ...hookArgs)
+    return unsub
+  }
+  // https://github.com/nuxt/nuxt/tree/main/packages/kit/src/module/define.ts#L111-L113
+  nuxt.hooks ||= nuxt
+
   return nuxt as Nuxt
 }
 
 export async function buildNuxt (nuxt: Nuxt): Promise<any> {
-  const resolveOpts: RequireModuleOptions = { paths: nuxt.options.rootDir }
+  const rootDir = pathToFileURL(nuxt.options.rootDir).href
 
   // Nuxt 3
   if (nuxt.options._majorVersion === 3) {
-    const { build } = await tryImportModule('nuxt3', resolveOpts) || await importModule('nuxt', resolveOpts)
+    const { build } = await tryImportModule('nuxt-nightly', rootDir) || await tryImportModule('nuxt3', rootDir) || await importModule('nuxt', rootDir)
     return build(nuxt)
   }
 
   // Nuxt 2
-  const { build } = await tryImportModule('nuxt-edge', resolveOpts) || await importModule('nuxt', resolveOpts)
+  const { build } = await tryImportModule('nuxt-edge', rootDir) || await importModule('nuxt', rootDir)
   return build(nuxt)
 }

@@ -1,16 +1,18 @@
-import { basename, extname, join, dirname, relative } from 'pathe'
+import { readdir } from 'node:fs/promises'
+import { basename, dirname, extname, join, relative } from 'pathe'
 import { globby } from 'globby'
 import { pascalCase, splitByCase } from 'scule'
-import { isIgnored } from '@nuxt/kit'
+import { isIgnored, logger, useNuxt } from '@nuxt/kit'
 // eslint-disable-next-line vue/prefer-import-from-vue
 import { hyphenate } from '@vue/shared'
 import { withTrailingSlash } from 'ufo'
 import type { Component, ComponentsDir } from 'nuxt/schema'
 
+import { resolveComponentName } from '../core/utils'
+
 /**
  * Scan the components inside different components folders
  * and return a unique list of components
- *
  * @param dirs all folders where components are defined
  * @param srcDir src path of your app
  * @returns {Promise} Component found promise
@@ -30,6 +32,25 @@ export async function scanComponents (dirs: ComponentsDir[], srcDir: string): Pr
     const resolvedNames = new Map<string, string>()
 
     const files = (await globby(dir.pattern!, { cwd: dir.path, ignore: dir.ignore })).sort()
+
+    // Check if the directory exists (globby will otherwise read it case insensitively on MacOS)
+    if (files.length) {
+      const siblings = await readdir(dirname(dir.path)).catch(() => [] as string[])
+
+      const directory = basename(dir.path)
+      if (!siblings.includes(directory)) {
+        const directoryLowerCase = directory.toLowerCase()
+        const caseCorrected = siblings.find(sibling => sibling.toLowerCase() === directoryLowerCase)
+        if (caseCorrected) {
+          const nuxt = useNuxt()
+          const original = relative(nuxt.options.srcDir, dir.path)
+          const corrected = relative(nuxt.options.srcDir, join(dirname(dir.path), caseCorrected))
+          logger.warn(`Components not scanned from \`~/${corrected}\`. Did you mean to name the directory \`~/${original}\` instead?`)
+          continue
+        }
+      }
+    }
+
     for (const _file of files) {
       const filePath = join(dir.path, _file)
 
@@ -45,7 +66,6 @@ export async function scanComponents (dirs: ComponentsDir[], srcDir: string): Pr
       /**
        * Create an array of prefixes base on the prefix config
        * Empty prefix will be an empty array
-       *
        * @example prefix: 'nuxt' -> ['nuxt']
        * @example prefix: 'nuxt-test' -> ['nuxt', 'test']
        */
@@ -56,7 +76,6 @@ export async function scanComponents (dirs: ComponentsDir[], srcDir: string): Pr
 
       /**
        * In case we have index as filename the component become the parent path
-       *
        * @example third-components/index.vue -> third-component
        * if not take the filename
        * @example third-components/Awesome.vue -> Awesome
@@ -72,30 +91,11 @@ export async function scanComponents (dirs: ComponentsDir[], srcDir: string): Pr
         fileName = dir.pathPrefix === false ? basename(dirname(filePath)) : '' /* inherits from path */
       }
 
-      /**
-       * Array of fileName parts splitted by case, / or -
-       *
-       * @example third-component -> ['third', 'component']
-       * @example AwesomeComponent -> ['Awesome', 'Component']
-       */
-      const fileNameParts = splitByCase(fileName)
-
-      const componentNameParts: string[] = []
-
-      while (prefixParts.length &&
-        (prefixParts[0] || '').toLowerCase() !== (fileNameParts[0] || '').toLowerCase()
-      ) {
-        componentNameParts.push(prefixParts.shift()!)
-      }
-
-      const componentName = pascalCase(componentNameParts) + pascalCase(fileNameParts)
       const suffix = (mode !== 'all' ? `-${mode}` : '')
+      const componentName = resolveComponentName(fileName, prefixParts)
 
       if (resolvedNames.has(componentName + suffix) || resolvedNames.has(componentName)) {
-        console.warn(`Two component files resolving to the same name \`${componentName}\`:\n` +
-          `\n - ${filePath}` +
-          `\n - ${resolvedNames.get(componentName)}`
-        )
+        warnAboutDuplicateComponent(componentName, filePath, resolvedNames.get(componentName) || resolvedNames.get(componentName + suffix)!)
         continue
       }
       resolvedNames.set(componentName + suffix, filePath)
@@ -120,20 +120,48 @@ export async function scanComponents (dirs: ComponentsDir[], srcDir: string): Pr
         shortPath,
         export: 'default',
         // by default, give priority to scanned components
-        priority: 1
+        priority: dir.priority ?? 1
       }
 
       if (typeof dir.extendComponent === 'function') {
         component = (await dir.extendComponent(component)) || component
       }
 
-      // Ignore component if component is already defined (with same mode)
-      if (!components.some(c => c.pascalName === component.pascalName && ['all', component.mode].includes(c.mode))) {
-        components.push(component)
+      // Ignore files like `~/components/index.vue` which end up not having a name at all
+      if (!componentName) {
+        logger.warn(`Component did not resolve to a file name in \`~/${relative(srcDir, filePath)}\`.`)
+        continue
       }
+
+      const existingComponent = components.find(c => c.pascalName === component.pascalName && ['all', component.mode].includes(c.mode))
+      // Ignore component if component is already defined (with same mode)
+      if (existingComponent) {
+        const existingPriority = existingComponent.priority ?? 0
+        const newPriority = component.priority ?? 0
+
+        // Replace component if priority is higher
+        if (newPriority > existingPriority) {
+          components.splice(components.indexOf(existingComponent), 1, component)
+        }
+        // Warn if a user-defined (or prioritized) component conflicts with a previously scanned component
+        if (newPriority > 0 && newPriority === existingPriority) {
+          warnAboutDuplicateComponent(componentName, filePath, existingComponent.filePath)
+        }
+
+        continue
+      }
+
+      components.push(component)
     }
     scannedPaths.push(dir.path)
   }
 
   return components
+}
+
+function warnAboutDuplicateComponent (componentName: string, filePath: string, duplicatePath: string) {
+  logger.warn(`Two component files resolving to the same name \`${componentName}\`:\n` +
+    `\n - ${filePath}` +
+    `\n - ${duplicatePath}`
+  )
 }

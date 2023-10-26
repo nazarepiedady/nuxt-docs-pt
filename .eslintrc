@@ -1,19 +1,32 @@
 {
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    "packages/schema/schema",
+    "**/*.tmpl.*",
+    "sw.js"
+  ],
+  "$schema": "https://json.schemastore.org/eslintrc",
   "globals": {
     "NodeJS": true,
     "$fetch": true
   },
-  "plugins": [
-    "jsdoc"
-  ],
+  "plugins": ["jsdoc", "no-only-tests"],
   "extends": [
     "plugin:jsdoc/recommended",
     "@nuxtjs/eslint-config-typescript",
     "plugin:import/typescript"
   ],
   "rules": {
+    "sort-imports": [
+      "error",
+      {
+        "ignoreDeclarationSort": true
+      }
+    ],
+    "no-only-tests/no-only-tests": "error",
     "unicorn/prefer-node-protocol": "error",
-    "no-console": "off",
+    "no-console": "warn",
     "vue/multi-word-component-names": "off",
     "vue/one-component-per-file": "off",
     "vue/require-default-prop": "off",
@@ -25,10 +38,19 @@
     "jsdoc/require-param-type": "off",
     "no-redeclare": "off",
     "import/order": [
-      "error", {
+      "error",
+      {
         "pathGroups": [
           {
+            "pattern": "@nuxt/test-utils/experimental",
+            "group": "external"
+          },
+          {
             "pattern": "@nuxt/test-utils",
+            "group": "external"
+          },
+          {
+            "pattern": "#vue-router",
             "group": "external"
           }
         ]
@@ -62,6 +84,14 @@
         "disallowTypeAnnotations": false
       }
     ],
+    "@typescript-eslint/ban-ts-comment": [
+      "error",
+      {
+        "ts-expect-error": "allow-with-description",
+        "ts-ignore": true
+      }
+    ],
+    "@typescript-eslint/prefer-ts-expect-error": "error",
     "@typescript-eslint/no-unused-vars": [
       "error",
       {
@@ -69,10 +99,38 @@
         "varsIgnorePattern": "^_",
         "ignoreRestSiblings": true
       }
+    ],
+    "jsdoc/check-tag-names": [
+      "error",
+      {
+        "definedTags": ["__NO_SIDE_EFFECTS__"]
+      }
     ]
   },
+  "overrides": [
+    {
+        "files": ["packages/schema/**"],
+        "rules": {
+          "jsdoc/no-undefined-types": "off",
+          "jsdoc/valid-types": "off",
+          "jsdoc/check-tag-names": [
+            "error",
+            {
+              "definedTags": ["experimental"]
+            }
+          ]
+        }
+    },
+    {
+      "files": ["packages/nuxt/src/app/**", "test/**", "**/runtime/**"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ],
   "settings": {
     "jsdoc": {
+      "ignoreInternal": true,
       "tagNamePreference": {
         "warning": "warning",
         "note": "note"

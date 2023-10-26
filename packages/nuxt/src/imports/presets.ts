@@ -15,9 +15,6 @@ const commonPresets: InlinePreset[] = [
 const appPreset = defineUnimportPreset({
   from: '#app',
   imports: [
-    'useHead',
-    'useSeoMeta',
-    'useServerSeoMeta',
     'useAsyncData',
     'useLazyAsyncData',
     'useNuxtData',
@@ -26,17 +23,21 @@ const appPreset = defineUnimportPreset({
     'defineNuxtComponent',
     'useNuxtApp',
     'defineNuxtPlugin',
+    'definePayloadPlugin',
     'reloadNuxtApp',
     'useRuntimeConfig',
     'useState',
+    'clearNuxtState',
     'useFetch',
     'useLazyFetch',
     'useCookie',
     'useRequestHeaders',
     'useRequestEvent',
     'useRequestFetch',
+    'useRequestURL',
     'setResponseStatus',
     'setPageLayout',
+    'prerenderRoutes',
     'onNuxtReady',
     'useRouter',
     'useRoute',
@@ -58,7 +59,13 @@ const appPreset = defineUnimportPreset({
     'prefetchComponents',
     'loadPayload',
     'preloadPayload',
-    'isPrerendered'
+    'isPrerendered',
+    'getAppManifest',
+    'getRouteRules',
+    'definePayloadReducer',
+    'definePayloadReviver',
+    'requestIdleCallback',
+    'cancelIdleCallback'
   ]
 })
 
@@ -119,6 +126,8 @@ const vuePreset = defineUnimportPreset({
     'unref',
     'watch',
     'watchEffect',
+    'watchPostEffect',
+    'watchSyncEffect',
     'isShallow',
 
     // effect
@@ -134,8 +143,15 @@ const vuePreset = defineUnimportPreset({
     'getCurrentInstance',
     'h',
     'inject',
+    'hasInjectionContext',
     'nextTick',
     'provide',
+    'defineModel',
+    'defineOptions',
+    'defineSlots',
+    'mergeModels',
+    'toValue',
+    'useModel',
     'useAttrs',
     'useCssModule',
     'useCssVars',
@@ -151,9 +167,13 @@ const vueTypesPreset = defineUnimportPreset({
     'Component',
     'ComponentPublicInstance',
     'ComputedRef',
+    'ExtractPropTypes',
+    'ExtractPublicPropTypes',
     'InjectionKey',
     'PropType',
     'Ref',
+    'MaybeRef',
+    'MaybeRefOrGetter',
     'VNode'
   ]
 })

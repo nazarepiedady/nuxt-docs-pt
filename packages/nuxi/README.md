@@ -1,5 +1,5 @@
-# Nuxi
+# Nuxt CLI (nuxi)
 
-> Nuxt Command Line Interface
+⚡️ Next Generation CLI Experience for [Nuxt](https://nuxt.com/).
 
-Learn more about this package: <https://nuxt.com/docs/api/commands/add>
+- 👉 View on GitHub at https://github.com/nuxt/cli

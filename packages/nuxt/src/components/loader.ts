@@ -3,9 +3,11 @@ import { genDynamicImport, genImport } from 'knitwork'
 import MagicString from 'magic-string'
 import { pascalCase } from 'scule'
 import { resolve } from 'pathe'
-import { distDir } from '../dirs'
-import { isVueTemplate } from './helpers'
 import type { Component, ComponentsOptions } from 'nuxt/schema'
+
+import { logger } from '@nuxt/kit'
+import { distDir } from '../dirs'
+import { isVue } from '../core/utils'
 
 interface LoaderOptions {
   getComponents (): Component[]
@@ -24,15 +26,15 @@ export const loaderPlugin = createUnplugin((options: LoaderOptions) => {
     name: 'nuxt:components-loader',
     enforce: 'post',
     transformInclude (id) {
-      if (exclude.some(pattern => id.match(pattern))) {
+      if (exclude.some(pattern => pattern.test(id))) {
         return false
       }
-      if (include.some(pattern => id.match(pattern))) {
+      if (include.some(pattern => pattern.test(id))) {
         return true
       }
-      return isVueTemplate(id)
+      return isVue(id, { type: ['template', 'script'] }) || !!id.match(/\.[tj]sx$/)
     },
-    transform (code, id) {
+    transform (code) {
       const components = options.getComponents()
 
       let num = 0
@@ -44,21 +46,26 @@ export const loaderPlugin = createUnplugin((options: LoaderOptions) => {
       s.replace(/(?<=[ (])_?resolveComponent\(\s*["'](lazy-|Lazy)?([^'"]*?)["'][\s,]*[^)]*\)/g, (full: string, lazy: string, name: string) => {
         const component = findComponent(components, name, options.mode)
         if (component) {
+          // @ts-expect-error TODO: refactor to nuxi
+          if (component._internal_install) {
+            // @ts-expect-error TODO: refactor to nuxi
+            import('../core/features').then(({ installNuxtModule }) => installNuxtModule(component._internal_install))
+          }
           let identifier = map.get(component) || `__nuxt_component_${num++}`
           map.set(component, identifier)
 
-          const isServerOnly = component.mode === 'server' &&
+          const isServerOnly = !component._raw && component.mode === 'server' &&
             !components.some(c => c.pascalName === component.pascalName && c.mode === 'client')
           if (isServerOnly) {
             imports.add(genImport(serverComponentRuntime, [{ name: 'createServerComponent' }]))
             imports.add(`const ${identifier} = createServerComponent(${JSON.stringify(name)})`)
             if (!options.experimentalComponentIslands) {
-              console.warn(`Standalone server components (\`${name}\`) are not yet supported without enabling \`experimental.componentIslands\`.`)
+              logger.warn(`Standalone server components (\`${name}\`) are not yet supported without enabling \`experimental.componentIslands\`.`)
             }
             return identifier
           }
 
-          const isClientOnly = component.mode === 'client' && component.pascalName !== 'NuxtClientFallback'
+          const isClientOnly = !component._raw && component.mode === 'client'
           if (isClientOnly) {
             imports.add(genImport('#app/components/client-only', [{ name: 'createClientOnly' }]))
             identifier += '_client'
@@ -91,7 +98,7 @@ export const loaderPlugin = createUnplugin((options: LoaderOptions) => {
         return {
           code: s.toString(),
           map: options.sourcemap
-            ? s.generateMap({ source: id, includeContent: true })
+            ? s.generateMap({ hires: true })
             : undefined
         }
       }

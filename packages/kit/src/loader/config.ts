@@ -1,8 +1,9 @@
 import { resolve } from 'pathe'
+import type { JSValue } from 'untyped'
 import { applyDefaults } from 'untyped'
 import type { LoadConfigOptions } from 'c12'
 import { loadConfig } from 'c12'
-import type { NuxtOptions, NuxtConfig } from '@nuxt/schema'
+import type { NuxtConfig, NuxtOptions } from '@nuxt/schema'
 import { NuxtConfigSchema } from '@nuxt/schema'
 
 export interface LoadNuxtConfigOptions extends LoadConfigOptions<NuxtConfig> {}
@@ -50,5 +51,5 @@ export async function loadNuxtConfig (opts: LoadNuxtConfigOptions): Promise<Nuxt
   }
 
   // Resolve and apply defaults
-  return await applyDefaults(NuxtConfigSchema, nuxtConfig) as NuxtOptions
+  return await applyDefaults(NuxtConfigSchema, nuxtConfig as NuxtConfig & Record<string, JSValue>) as unknown as NuxtOptions
 }

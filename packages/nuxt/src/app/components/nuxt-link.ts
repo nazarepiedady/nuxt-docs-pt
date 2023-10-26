@@ -1,17 +1,21 @@
-import type { PropType, DefineComponent, ComputedRef } from 'vue'
-import { defineComponent, h, ref, resolveComponent, computed, onMounted, onBeforeUnmount } from 'vue'
-import type { RouteLocation, RouteLocationRaw } from 'vue-router'
-import { hasProtocol, parseQuery, parseURL, withoutTrailingSlash, withTrailingSlash } from 'ufo'
+import type { ComputedRef, DefineComponent, InjectionKey, PropType } from 'vue'
+import { computed, defineComponent, h, inject, onBeforeUnmount, onMounted, provide, ref, resolveComponent } from 'vue'
+import type { RouteLocation, RouteLocationRaw } from '#vue-router'
+import { hasProtocol, joinURL, parseQuery, parseURL, withTrailingSlash, withoutTrailingSlash } from 'ufo'
 
 import { preloadRouteComponents } from '../composables/preload'
 import { onNuxtReady } from '../composables/ready'
 import { navigateTo, useRouter } from '../composables/router'
-import { useNuxtApp } from '../nuxt'
+import { useNuxtApp, useRuntimeConfig } from '../nuxt'
 import { cancelIdleCallback, requestIdleCallback } from '../compat/idle-callback'
+
+// @ts-expect-error virtual file
+import { nuxtLinkDefaults } from '#build/nuxt.config.mjs'
 
 const firstNonUndefined = <T> (...args: (T | undefined)[]) => args.find(arg => arg !== undefined)
 
 const DEFAULT_EXTERNAL_REL_ATTRIBUTE = 'noopener noreferrer'
+const NuxtLinkDevKeySymbol: InjectionKey<boolean> = Symbol('nuxt-link-dev-key')
 
 export type NuxtLinkOptions = {
   componentName?: string
@@ -24,8 +28,8 @@ export type NuxtLinkOptions = {
 
 export type NuxtLinkProps = {
   // Routing
-  to?: string | RouteLocationRaw
-  href?: string | RouteLocationRaw
+  to?: RouteLocationRaw
+  href?: RouteLocationRaw
   external?: boolean
   replace?: boolean
   custom?: boolean
@@ -46,11 +50,12 @@ export type NuxtLinkProps = {
   ariaCurrentValue?: string
 }
 
+/*! @__NO_SIDE_EFFECTS__ */
 export function defineNuxtLink (options: NuxtLinkOptions) {
   const componentName = options.componentName || 'NuxtLink'
 
   const checkPropConflicts = (props: NuxtLinkProps, main: keyof NuxtLinkProps, sub: keyof NuxtLinkProps): void => {
-    if (process.dev && props[main] !== undefined && props[sub] !== undefined) {
+    if (import.meta.dev && props[main] !== undefined && props[sub] !== undefined) {
       console.warn(`[${componentName}] \`${main}\` and \`${sub}\` cannot be used together. \`${sub}\` will be ignored.`)
     }
   }
@@ -81,12 +86,12 @@ export function defineNuxtLink (options: NuxtLinkOptions) {
     props: {
       // Routing
       to: {
-        type: [String, Object] as PropType<string | RouteLocationRaw>,
+        type: [String, Object] as PropType<RouteLocationRaw>,
         default: undefined,
         required: false
       },
       href: {
-        type: [String, Object] as PropType<string | RouteLocationRaw>,
+        type: [String, Object] as PropType<RouteLocationRaw>,
         default: undefined,
         required: false
       },
@@ -165,6 +170,7 @@ export function defineNuxtLink (options: NuxtLinkOptions) {
     },
     setup (props, { slots }) {
       const router = useRouter()
+      const config = useRuntimeConfig()
 
       // Resolving `to` value from `to` and `href` props
       const to: ComputedRef<string | RouteLocationRaw> = computed(() => {
@@ -174,6 +180,9 @@ export function defineNuxtLink (options: NuxtLinkOptions) {
 
         return resolveTrailingSlashBehavior(path, router.resolve)
       })
+
+      // Lazily check whether to.value has a protocol
+      const isProtocolURL = computed(() => typeof to.value === 'string' && hasProtocol(to.value, { acceptRelative: true }))
 
       // Resolving link type
       const isExternal = computed<boolean>(() => {
@@ -192,25 +201,27 @@ export function defineNuxtLink (options: NuxtLinkOptions) {
           return false
         }
 
-        return to.value === '' || hasProtocol(to.value, true)
+        return to.value === '' || isProtocolURL.value
       })
 
       // Prefetching
       const prefetched = ref(false)
-      const el = process.server ? undefined : ref<HTMLElement | null>(null)
-      if (process.client) {
+      const el = import.meta.server ? undefined : ref<HTMLElement | null>(null)
+      const elRef = import.meta.server ? undefined : (ref: any) => { el!.value = props.custom ? ref?.$el?.nextElementSibling : ref?.$el }
+
+      if (import.meta.client) {
         checkPropConflicts(props, 'prefetch', 'noPrefetch')
         const shouldPrefetch = props.prefetch !== false && props.noPrefetch !== true && props.target !== '_blank' && !isSlowConnection()
         if (shouldPrefetch) {
           const nuxtApp = useNuxtApp()
           let idleId: number
-          let unobserve: (() => void)| null = null
+          let unobserve: (() => void) | null = null
           onMounted(() => {
             const observer = useObserver()
             onNuxtReady(() => {
               idleId = requestIdleCallback(() => {
                 if (el?.value?.tagName) {
-                  unobserve = observer!.observe(el.value, async () => {
+                  unobserve = observer!.observe(el.value as HTMLElement, async () => {
                     unobserve?.()
                     unobserve = null
 
@@ -233,10 +244,19 @@ export function defineNuxtLink (options: NuxtLinkOptions) {
         }
       }
 
+      if (import.meta.dev && import.meta.server && !props.custom) {
+        const isNuxtLinkChild = inject(NuxtLinkDevKeySymbol, false)
+        if (isNuxtLinkChild) {
+          console.log('[nuxt] [NuxtLink] You can\'t nest one <a> inside another <a>. This will cause a hydration error on client-side. You can pass the `custom` prop to take full control of the markup.')
+        } else {
+          provide(NuxtLinkDevKeySymbol, true)
+        }
+      }
+
       return () => {
         if (!isExternal.value) {
           const routerLinkProps: Record<string, any> = {
-            ref: process.server ? undefined : (ref: any) => { el!.value = ref?.$el },
+            ref: elRef,
             to: to.value,
             activeClass: props.activeClass || options.activeClass,
             exactActiveClass: props.exactActiveClass || options.exactActiveClass,
@@ -263,8 +283,12 @@ export function defineNuxtLink (options: NuxtLinkOptions) {
         }
 
         // Resolves `to` value if it's a route location object
-        // converts `'''` to `null` to prevent the attribute from being added as empty (`href=""`)
-        const href = typeof to.value === 'object' ? router.resolve(to.value)?.href ?? null : to.value || null
+        // converts `""` to `null` to prevent the attribute from being added as empty (`href=""`)
+        const href = typeof to.value === 'object'
+          ? router.resolve(to.value)?.href ?? null
+          : (to.value && !props.external && !isProtocolURL.value)
+              ? resolveTrailingSlashBehavior(joinURL(config.app.baseURL, to.value), router.resolve) as string
+              : to.value || null
 
         // Resolves `target` value
         const target = props.target || null
@@ -319,14 +343,14 @@ export function defineNuxtLink (options: NuxtLinkOptions) {
   }) as unknown as DefineComponent<NuxtLinkProps>
 }
 
-export default defineNuxtLink({ componentName: 'NuxtLink' })
+export default defineNuxtLink(nuxtLinkDefaults)
 
 // --- Prefetching utils ---
 type CallbackFn = () => void
 type ObserveFn = (element: Element, callback: CallbackFn) => () => void
 
 function useObserver (): { observe: ObserveFn } | undefined {
-  if (process.server) { return }
+  if (import.meta.server) { return }
 
   const nuxtApp = useNuxtApp()
   if (nuxtApp._observer) {
@@ -367,7 +391,7 @@ function useObserver (): { observe: ObserveFn } | undefined {
 }
 
 function isSlowConnection () {
-  if (process.server) { return }
+  if (import.meta.server) { return }
 
   // https://developer.mozilla.org/en-US/docs/Web/API/Navigator/connection
   const cn = (navigator as any).connection as { saveData: boolean, effectiveType: string } | null

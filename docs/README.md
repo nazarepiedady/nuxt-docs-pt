@@ -2,10 +2,10 @@
 navigation: false
 ---
 
-# Documentação da Nuxt 3
+# Nuxt Docs
 
-Este repositório contém a documentação da Nuxt 3 hospedada na nuxt.com.
+This repository contains the documentation of Nuxt hosted on <https://nuxt.com/docs>
 
-## Contribuindo
+## Contributing
 
-Tu podes contribuir diretamente na GitHub por agora, estamos a planear abrir a fonte do repositório nuxt.com para todos contribuírem com facilidade muito em breve.
+Have a look at <https://github.com/nuxt/nuxt.com> to run the website locally.

@@ -6,19 +6,21 @@ import { isWindows } from 'std-env'
 export default defineConfig({
   resolve: {
     alias: {
-      '#app': resolve('./packages/nuxt/src/app/index.ts'),
+      '#build/nuxt.config.mjs': resolve('./test/mocks/nuxt-config'),
+      '#app': resolve('./packages/nuxt/dist/app/index'),
+      '@nuxt/test-utils/experimental': resolve('./packages/test-utils/src/experimental.ts'),
       '@nuxt/test-utils': resolve('./packages/test-utils/src/index.ts')
     }
   },
-  esbuild: {
-    tsconfigRaw: '{}'
+  define: {
+    'process.env.NUXT_ASYNC_CONTEXT': 'false'
   },
   test: {
-    globalSetup: 'test/setup.ts',
+    globalSetup: './test/setup.ts',
+    setupFiles: ['./test/setup-env.ts'],
     testTimeout: isWindows ? 60000 : 10000,
-    deps: { inline: ['@vitejs/plugin-vue'] },
     // Excluded plugin because it should throw an error when accidentally loaded via Nuxt
-    exclude: [...configDefaults.exclude, '**/this-should-not-load.spec.js'],
+    exclude: [...configDefaults.exclude, '**/test/nuxt/**', '**/test.ts', '**/this-should-not-load.spec.js'],
     maxThreads: process.env.TEST_ENV === 'dev' ? 1 : undefined,
     minThreads: process.env.TEST_ENV === 'dev' ? 1 : undefined
   }
