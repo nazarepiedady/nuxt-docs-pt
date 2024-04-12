@@ -2,13 +2,13 @@
 defineProps({
   multiplier: {
     type: Number,
-    required: true
-  }
+    required: true,
+  },
 })
 </script>
 
 <template>
   <div>
-    <SugarCounter :multiplier="multiplier" />
+    <Counter :multiplier="multiplier" />
   </div>
 </template>

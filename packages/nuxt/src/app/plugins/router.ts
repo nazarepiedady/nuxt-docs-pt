@@ -1,12 +1,16 @@
-import { h, isReadonly, reactive } from 'vue'
+import type { Ref } from 'vue'
+import { computed, defineComponent, h, isReadonly, reactive } from 'vue'
 import { isEqual, joinURL, parseQuery, parseURL, stringifyParsedURL, stringifyQuery, withoutBase } from 'ufo'
 import { createError } from 'h3'
 import { defineNuxtPlugin, useRuntimeConfig } from '../nuxt'
+import { getRouteRules } from '../composables/manifest'
 import { clearError, showError } from '../composables/error'
 import { navigateTo } from '../composables/router'
 
 // @ts-expect-error virtual file
 import { globalMiddleware } from '#build/middleware'
+// @ts-expect-error virtual file
+import { appManifest as isAppManifestEnabled } from '#build/nuxt.config.mjs'
 
 interface Route {
   /** Percentage encoded pathname section of the URL. */
@@ -37,7 +41,7 @@ function getRouteFromPath (fullPath: string | Partial<Route>) {
     fullPath = stringifyParsedURL({
       pathname: fullPath.path || '',
       search: stringifyQuery(fullPath.query || {}),
-      hash: fullPath.hash || ''
+      hash: fullPath.hash || '',
     })
   }
 
@@ -53,7 +57,7 @@ function getRouteFromPath (fullPath: string | Partial<Route>) {
     matched: [],
     redirectedFrom: undefined,
     meta: {},
-    href: fullPath
+    href: fullPath,
   }
 }
 
@@ -71,7 +75,7 @@ interface RouterHooks {
 }
 
 interface Router {
-  currentRoute: Route
+  currentRoute: Ref<Route>
   isReady: () => Promise<void>
   options: {}
   install: () => Promise<void>
@@ -108,7 +112,7 @@ export default defineNuxtPlugin<{ route: Route, router: Router }>({
       'navigate:before': [],
       'resolve:before': [],
       'navigate:after': [],
-      error: []
+      'error': [],
     }
 
     const registerHook = <T extends keyof RouterHooks> (hook: T, guard: RouterHooks[T]) => {
@@ -158,8 +162,10 @@ export default defineNuxtPlugin<{ route: Route, router: Router }>({
       }
     }
 
+    const currentRoute = computed(() => route)
+
     const router: Router = {
-      currentRoute: route,
+      currentRoute,
       isReady: () => Promise.resolve(),
       // These options provide a similar API to vue-router but have no effect
       options: {},
@@ -185,30 +191,33 @@ export default defineNuxtPlugin<{ route: Route, router: Router }>({
         if (index !== -1) {
           routes.splice(index, 1)
         }
-      }
+      },
     }
 
-    nuxtApp.vueApp.component('RouterLink', {
+    nuxtApp.vueApp.component('RouterLink', defineComponent({
       functional: true,
       props: {
-        to: String,
+        to: {
+          type: String,
+          required: true,
+        },
         custom: Boolean,
         replace: Boolean,
         // Not implemented
         activeClass: String,
         exactActiveClass: String,
-        ariaCurrentValue: String
+        ariaCurrentValue: String,
       },
       setup: (props, { slots }) => {
-        const navigate = () => handleNavigation(props.to, props.replace)
+        const navigate = () => handleNavigation(props.to!, props.replace)
         return () => {
-          const route = router.resolve(props.to)
+          const route = router.resolve(props.to!)
           return props.custom
             ? slots.default?.({ href: props.to, navigate, route })
             : h('a', { href: props.to, onClick: (e: MouseEvent) => { e.preventDefault(); return navigate() } }, slots)
         }
-      }
-    })
+      },
+    }))
 
     if (import.meta.client) {
       window.addEventListener('popstate', (event) => {
@@ -222,7 +231,7 @@ export default defineNuxtPlugin<{ route: Route, router: Router }>({
     // Handle middleware
     nuxtApp._middleware = nuxtApp._middleware || {
       global: [],
-      named: {}
+      named: {},
     }
 
     const initialLayout = nuxtApp.payload.state._layout
@@ -237,13 +246,33 @@ export default defineNuxtPlugin<{ route: Route, router: Router }>({
         if (import.meta.client || !nuxtApp.ssrContext?.islandContext) {
           const middlewareEntries = new Set<RouteGuard>([...globalMiddleware, ...nuxtApp._middleware.global])
 
+          if (isAppManifestEnabled) {
+            const routeRules = await nuxtApp.runWithContext(() => getRouteRules(to.path))
+
+            if (routeRules.appMiddleware) {
+              for (const key in routeRules.appMiddleware) {
+                const guard = nuxtApp._middleware.named[key] as RouteGuard | undefined
+                if (!guard) { return }
+
+                if (routeRules.appMiddleware[key]) {
+                  middlewareEntries.add(guard)
+                } else {
+                  middlewareEntries.delete(guard)
+                }
+              }
+            }
+          }
+
           for (const middleware of middlewareEntries) {
             const result = await nuxtApp.runWithContext(() => middleware(to, from))
             if (import.meta.server) {
               if (result === false || result instanceof Error) {
                 const error = result || createError({
                   statusCode: 404,
-                  statusMessage: `Page Not Found: ${initialURL}`
+                  statusMessage: `Page Not Found: ${initialURL}`,
+                  data: {
+                    path: initialURL,
+                  },
                 })
                 delete nuxtApp._processingMiddleware
                 return nuxtApp.runWithContext(() => showError(error))
@@ -266,8 +295,8 @@ export default defineNuxtPlugin<{ route: Route, router: Router }>({
     return {
       provide: {
         route,
-        router
-      }
+        router,
+      },
     }
-  }
+  },
 })

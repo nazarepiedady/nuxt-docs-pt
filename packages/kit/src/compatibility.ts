@@ -18,7 +18,7 @@ export async function checkNuxtCompatibility (constraints: NuxtCompatibility, nu
     if (!satisfies(normalizeSemanticVersion(nuxtVersion), constraints.nuxt, { includePrerelease: true })) {
       issues.push({
         name: 'nuxt',
-        message: `Nuxt version \`${constraints.nuxt}\` is required but currently using \`${nuxtVersion}\``
+        message: `Nuxt version \`${constraints.nuxt}\` is required but currently using \`${nuxtVersion}\``,
       })
     }
   }
@@ -30,12 +30,12 @@ export async function checkNuxtCompatibility (constraints: NuxtCompatibility, nu
     if (bridgeRequirement === true && !hasBridge) {
       issues.push({
         name: 'bridge',
-        message: 'Nuxt bridge is required'
+        message: 'Nuxt bridge is required',
       })
     } else if (bridgeRequirement === false && hasBridge) {
       issues.push({
         name: 'bridge',
-        message: 'Nuxt bridge is not supported'
+        message: 'Nuxt bridge is not supported',
       })
     }
   }
@@ -73,23 +73,25 @@ export async function hasNuxtCompatibility (constraints: NuxtCompatibility, nuxt
  * Check if current nuxt instance is version 2 legacy
  */
 export function isNuxt2 (nuxt: Nuxt = useNuxt()) {
-  return getNuxtVersion(nuxt).startsWith('2.')
+  const version = getNuxtVersion(nuxt)
+  return version[0] === '2' && version[1] === '.'
 }
 
 /**
  * Check if current nuxt instance is version 3
  */
 export function isNuxt3 (nuxt: Nuxt = useNuxt()) {
-  return getNuxtVersion(nuxt).startsWith('3.')
+  const version = getNuxtVersion(nuxt)
+  return version[0] === '3' && version[1] === '.'
 }
 
 /**
  * Get nuxt version
  */
 export function getNuxtVersion (nuxt: Nuxt | any = useNuxt() /* TODO: LegacyNuxt */) {
-  const version = (nuxt?._version || nuxt?.version || nuxt?.constructor?.version || '').replace(/^v/g, '')
-  if (!version) {
+  const rawVersion = nuxt?._version || nuxt?.version || nuxt?.constructor?.version
+  if (!rawVersion) {
     throw new Error('Cannot determine nuxt version! Is current instance passed?')
   }
-  return version
+  return rawVersion.replace(/^v/g, '')
 }

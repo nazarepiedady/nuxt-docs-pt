@@ -4,50 +4,16 @@ import type { Options as VuePluginOptions } from '@vitejs/plugin-vue'
 import type { Options as VueJsxPluginOptions } from '@vitejs/plugin-vue-jsx'
 import type { SchemaDefinition } from 'untyped'
 import type { NitroRuntimeConfig, NitroRuntimeConfigApp } from 'nitropack'
+import type { SnakeCase } from 'scule'
 import type { ConfigSchema } from '../../schema/config'
 import type { Nuxt } from './nuxt'
 import type { AppHeadMetaObject } from './head'
+
 export type { SchemaDefinition } from 'untyped'
 
 type DeepPartial<T> = T extends Function ? T : T extends Record<string, any> ? { [P in keyof T]?: DeepPartial<T[P]> } : T
 
-type ExtractUpperChunk<T extends string> = T extends `${infer A}${infer B}`
-  ? A extends Uppercase<A>
-    ? B extends `${Uppercase<string>}${infer Rest}`
-      ? B extends `${infer C}${Rest}`
-        ? `${A}${C}${ExtractUpperChunk<Rest>}`
-        : never
-      : A
-    : ''
-  : never
-
-type SliceLast<T extends string> = T extends `${infer A}${infer B}`
-  ? B extends `${infer C}${infer D}`
-    ? D extends ''
-      ? A
-      : `${A}${C}${SliceLast<D>}`
-    : ''
-  : never
-
-type UpperSnakeCase<T extends string, State extends 'start' | 'lower' | 'upper' = 'start'> = T extends `${infer A}${infer B}`
-  ? A extends Uppercase<A>
-    ? A extends `${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 0}`
-      ? `${A}${UpperSnakeCase<B, 'lower'>}`
-      : State extends 'lower' | 'upper'
-        ? B extends `${SliceLast<ExtractUpperChunk<B>>}${infer Rest}`
-          ? SliceLast<ExtractUpperChunk<B>> extends ''
-            ? `_${A}_${UpperSnakeCase<B, 'start'>}`
-            : `_${A}${SliceLast<ExtractUpperChunk<B>>}_${UpperSnakeCase<Rest, 'start'>}`
-          : B extends Uppercase<B>
-            ? `_${A}${B}`
-            : `_${A}${UpperSnakeCase<B, 'lower'>}`
-        : State extends 'start'
-          ? `${A}${UpperSnakeCase<B, 'lower'>}`
-          : never
-      : State extends 'start' | 'lower'
-        ? `${Uppercase<A>}${UpperSnakeCase<B, 'lower'>}`
-        : `_${Uppercase<A>}${UpperSnakeCase<B, 'lower'>}`
-  : Uppercase<T>
+export type UpperSnakeCase<S extends string> = Uppercase<SnakeCase<S>>
 
 const message = Symbol('message')
 export type RuntimeValue<T, B extends string> = T & { [message]?: B }
@@ -58,9 +24,9 @@ type Overrideable<T extends Record<string, any>, Path extends string = ''> = {
       : T[K] extends Record<string, unknown>
         ? RuntimeValue<Overrideable<T[K], `${Path}_${UpperSnakeCase<K>}`>, `You can override this value at runtime with NUXT${Path}_${UpperSnakeCase<K>}`>
         : RuntimeValue<T[K], `You can override this value at runtime with NUXT${Path}_${UpperSnakeCase<K>}`>
-      : K extends number
-        ? T[K]
-        : never
+    : K extends number
+      ? T[K]
+      : never
 }
 
 // Runtime Config
@@ -70,27 +36,27 @@ type RuntimeConfigNamespace = Record<string, unknown>
 export interface PublicRuntimeConfig extends RuntimeConfigNamespace { }
 
 export interface RuntimeConfig extends RuntimeConfigNamespace {
-    app: NitroRuntimeConfigApp
-    /** Only available on the server. */
-    nitro?: NitroRuntimeConfig['nitro']
-    public: PublicRuntimeConfig
+  app: NitroRuntimeConfigApp
+  /** Only available on the server. */
+  nitro?: NitroRuntimeConfig['nitro']
+  public: PublicRuntimeConfig
 }
 
 // User configuration in `nuxt.config` file
 export interface NuxtConfig extends DeepPartial<Omit<ConfigSchema, 'vite' | 'runtimeConfig'>> {
-    // Avoid DeepPartial for vite config interface (#4772)
-    vite?: ConfigSchema['vite']
-    runtimeConfig?: Overrideable<RuntimeConfig>
-    webpack?: DeepPartial<ConfigSchema['webpack']> & {
-        $client?: DeepPartial<ConfigSchema['webpack']>
-        $server?: DeepPartial<ConfigSchema['webpack']>
-    }
+  // Avoid DeepPartial for vite config interface (#4772)
+  vite?: ConfigSchema['vite']
+  runtimeConfig?: Overrideable<RuntimeConfig>
+  webpack?: DeepPartial<ConfigSchema['webpack']> & {
+    $client?: DeepPartial<ConfigSchema['webpack']>
+    $server?: DeepPartial<ConfigSchema['webpack']>
+  }
 
-    /**
-     * Experimental custom config schema
-     * @see [Nuxt Issue #15592](https://github.com/nuxt/nuxt/issues/15592)
-     */
-    $schema?: SchemaDefinition
+  /**
+   * Experimental custom config schema
+   * @see [Nuxt Issue #15592](https://github.com/nuxt/nuxt/issues/15592)
+   */
+  $schema?: SchemaDefinition
 }
 
 // TODO: Expose ConfigLayer<T> from c12
@@ -100,12 +66,12 @@ interface ConfigLayer<T> {
   configFile: string
 }
 export type NuxtConfigLayer = ConfigLayer<NuxtConfig & {
-  srcDir: ConfigSchema['srcDir'],
+  srcDir: ConfigSchema['srcDir']
   rootDir: ConfigSchema['rootDir']
 }>
 
 export interface NuxtBuilder {
-    bundle: (nuxt: Nuxt) => Promise<void>
+  bundle: (nuxt: Nuxt) => Promise<void>
 }
 
 // Normalized Nuxt options available as `nuxt.options.*`
@@ -179,6 +145,7 @@ export interface NuxtAppConfig {
   head: AppHeadMetaObject
   layoutTransition: boolean | TransitionProps
   pageTransition: boolean | TransitionProps
+  viewTransition?: boolean | 'always'
   keepalive: boolean | KeepAliveProps
 }
 

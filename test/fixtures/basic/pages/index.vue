@@ -68,7 +68,7 @@
     <NuxtLink to="/no-scripts">
       to no script
     </NuxtLink>
-    <NestedSugarCounter :multiplier="2" />
+    <NestedCounter :multiplier="2" />
     <CustomComponent />
     <component :is="`global${'-'.toString()}sync`" />
     <Spin>Test</Spin>
@@ -86,6 +86,9 @@
     <NuxtLink to="/big-page-1">
       to big 1
     </NuxtLink>
+    <NuxtLink to="/server-page">
+      to server page
+    </NuxtLink>
   </div>
 </template>
 
@@ -100,8 +103,8 @@ const config = useRuntimeConfig()
 
 const someValue = useState('val', () => 1)
 
-const NestedSugarCounter = resolveComponent('NestedSugarCounter')
-if (!NestedSugarCounter) {
+const NestedCounter = resolveComponent('NestedCounter')
+if (!NestedCounter) {
   throw new Error('Component not found')
 }
 
@@ -109,12 +112,12 @@ definePageMeta({
   alias: '/some-alias',
   other: ref('test'),
   imported: importedValue,
-  something: importedRE.test('an imported regex')
+  something: importedRE.test('an imported regex'),
 })
 
 // reset title template example
 useHead({
-  titleTemplate: ''
+  titleTemplate: '',
 })
 
 const foo = useFoo()

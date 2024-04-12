@@ -44,6 +44,10 @@ describe('resolveApp', () => {
             "src": "<repoRoot>/packages/nuxt/src/app/plugins/payload.client.ts",
           },
           {
+            "mode": "client",
+            "src": "<repoRoot>/packages/nuxt/src/app/plugins/check-outdated-build.client.ts",
+          },
+          {
             "mode": "server",
             "src": "<repoRoot>/packages/nuxt/src/app/plugins/revive-payload.server.ts",
           },
@@ -69,13 +73,42 @@ describe('resolveApp', () => {
             "mode": "client",
             "src": "<repoRoot>/packages/nuxt/src/app/plugins/chunk-reload.client.ts",
           },
-          {
-            "mode": "client",
-            "src": "<repoRoot>/packages/nuxt/src/app/plugins/check-outdated-build.client.ts",
-          },
         ],
         "rootComponent": "<repoRoot>/packages/nuxt/src/app/components/nuxt-root.vue",
         "templates": [],
+      }
+    `)
+  })
+
+  it('resolves layouts and middleware correctly', async () => {
+    const app = await getResolvedApp([
+      'middleware/index.ts',
+      'middleware/auth/index.ts',
+      'middleware/other.ts',
+      'layouts/index.vue',
+      'layouts/default/index.vue',
+      'layouts/other.vue',
+    ])
+    // Middleware are not resolved in a nested manner
+    expect(app.middleware.filter(m => m.path.startsWith('<rootDir>'))).toMatchInlineSnapshot(`
+      [
+        {
+          "global": false,
+          "name": "other",
+          "path": "<rootDir>/middleware/other.ts",
+        },
+      ]
+    `)
+    expect(app.layouts).toMatchInlineSnapshot(`
+      {
+        "default": {
+          "file": "<rootDir>/layouts/default/index.vue",
+          "name": "default",
+        },
+        "other": {
+          "file": "<rootDir>/layouts/other.vue",
+          "name": "other",
+        },
       }
     `)
   })
@@ -97,8 +130,8 @@ describe('resolveApp', () => {
       'plugins/object-named.ts',
       {
         name: 'nuxt.config.ts',
-        contents: 'export default defineNuxtConfig({ extends: [\'./layer2\', \'./layer1\'] })'
-      }
+        contents: 'export default defineNuxtConfig({ extends: [\'./layer2\', \'./layer1\'] })',
+      },
     ])
     const fixturePlugins = app.plugins.filter(p => !('getContents' in p) && p.src.includes('<rootDir>')).map(p => p.src)
     // TODO: support overriding named plugins
@@ -134,8 +167,8 @@ describe('resolveApp', () => {
       'middleware/named.ts',
       {
         name: 'nuxt.config.ts',
-        contents: 'export default defineNuxtConfig({ extends: [\'./layer2\', \'./layer1\'] })'
-      }
+        contents: 'export default defineNuxtConfig({ extends: [\'./layer2\', \'./layer1\'] })',
+      },
     ])
     const fixtureMiddleware = app.middleware.filter(p => p.path.includes('<rootDir>')).map(p => p.path)
     // TODO: fix this
@@ -163,8 +196,8 @@ describe('resolveApp', () => {
       'layouts/default.vue',
       {
         name: 'nuxt.config.ts',
-        contents: 'export default defineNuxtConfig({ extends: [\'./layer2\', \'./layer1\'] })'
-      }
+        contents: 'export default defineNuxtConfig({ extends: [\'./layer2\', \'./layer1\'] })',
+      },
     ])
     expect(app.layouts).toMatchInlineSnapshot(`
       {
@@ -189,7 +222,7 @@ describe('resolveApp', () => {
       'layouts/thing/thing/thing.vue',
       'layouts/desktop-base/base.vue',
       'layouts/some.vue',
-      'layouts/SomeOther/layout.ts'
+      'layouts/SomeOther/layout.ts',
     ])
     expect(app.layouts).toMatchInlineSnapshot(`
       {

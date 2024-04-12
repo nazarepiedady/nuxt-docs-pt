@@ -4,19 +4,18 @@ import type { RouteLocation, RouteLocationNormalizedLoaded } from '#vue-router'
 import { PageRouteSymbol } from './injections'
 
 export const RouteProvider = defineComponent({
-  name: 'RouteProvider',
   props: {
     vnode: {
       type: Object as () => VNode,
-      required: true
+      required: true,
     },
     route: {
       type: Object as () => RouteLocationNormalizedLoaded,
-      required: true
+      required: true,
     },
     vnodeRef: Object as () => Ref<any>,
     renderKey: String,
-    trackRootNodes: Boolean
+    trackRootNodes: Boolean,
   },
   setup (props) {
     // Prevent reactivity when the page will be rerendered in a different suspense fork
@@ -27,7 +26,7 @@ export const RouteProvider = defineComponent({
     const route = {} as RouteLocation
     for (const key in props.route) {
       Object.defineProperty(route, key, {
-        get: () => previousKey === props.renderKey ? props.route[key as keyof RouteLocationNormalizedLoaded] : previousRoute[key as keyof RouteLocationNormalizedLoaded]
+        get: () => previousKey === props.renderKey ? props.route[key as keyof RouteLocationNormalizedLoaded] : previousRoute[key as keyof RouteLocationNormalizedLoaded],
       })
     }
 
@@ -53,5 +52,5 @@ export const RouteProvider = defineComponent({
 
       return h(props.vnode, { ref: props.vnodeRef })
     }
-  }
+  },
 })

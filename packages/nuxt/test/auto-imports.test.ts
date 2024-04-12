@@ -13,11 +13,11 @@ describe('imports:transform', () => {
   const imports: Import[] = [
     { name: 'ref', as: 'ref', from: 'vue' },
     { name: 'computed', as: 'computed', from: 'bar' },
-    { name: 'foo', as: 'foo', from: 'excluded' }
+    { name: 'foo', as: 'foo', from: 'excluded' },
   ]
 
   const ctx = createUnimport({
-    imports
+    imports,
   })
 
   const transformPlugin = TransformPlugin.raw({ ctx, options: { transform: { exclude: [/node_modules/] } } }, { framework: 'rollup' }) as Plugin
@@ -44,7 +44,7 @@ describe('imports:transform', () => {
     const result = await transform('// import { computed } from "foo"\n;const a = computed(0)')
     expect(result).toMatchInlineSnapshot(`
       "import { computed } from 'bar';
-      // import { computed } from \\"foo\\"
+      // import { computed } from "foo"
       ;const a = computed(0)"
     `)
   })
@@ -73,7 +73,6 @@ describe('imports:nuxt', () => {
     }
   } catch (e) {
     it('should import composables', () => {
-      // eslint-disable-next-line no-console
       console.error(e)
       expect(false).toBe(true)
     })
@@ -162,6 +161,7 @@ const excludedVueHelpers = [
   'Transition',
   'TransitionGroup',
   'VueElement',
+  'ErrorTypeStrings',
   'createApp',
   'createSSRApp',
   'defineCustomElement',
@@ -176,7 +176,11 @@ const excludedVueHelpers = [
   'vModelSelect',
   'vModelText',
   'vShow',
-  'compile'
+  'compile',
+  'DeprecationTypes',
+  'ErrorCodes',
+  'TrackOpTypes',
+  'TriggerOpTypes',
 ]
 
 describe('imports:vue', () => {

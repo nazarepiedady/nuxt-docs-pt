@@ -14,22 +14,30 @@ const revivers: Record<string, (data: any) => any> = {
   ShallowRef: data => shallowRef(data),
   ShallowReactive: data => shallowReactive(data),
   Ref: data => ref(data),
-  Reactive: data => reactive(data)
+  Reactive: data => reactive(data),
 }
 
 if (componentIslands) {
-  revivers.Island = ({ key, params }: any) => {
+  revivers.Island = ({ key, params, result }: any) => {
     const nuxtApp = useNuxtApp()
     if (!nuxtApp.isHydrating) {
       nuxtApp.payload.data[key] = nuxtApp.payload.data[key] || $fetch(`/__nuxt_island/${key}.json`, {
         responseType: 'json',
-        ...params ? { params } : {}
+        ...params ? { params } : {},
       }).then((r) => {
         nuxtApp.payload.data[key] = r
         return r
       })
     }
-    return null
+    return {
+      html: '',
+      state: {},
+      head: {
+        link: [],
+        style: [],
+      },
+      ...result,
+    }
   }
 }
 
@@ -43,5 +51,5 @@ export default defineNuxtPlugin({
     Object.assign(nuxtApp.payload, await nuxtApp.runWithContext(getNuxtClientPayload))
     // For backwards compatibility - TODO: remove later
     window.__NUXT__ = nuxtApp.payload
-  }
+  },
 })

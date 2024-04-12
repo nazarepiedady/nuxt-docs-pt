@@ -27,7 +27,8 @@ async function runLegacyAsyncData (res: Record<string, any> | Promise<Record<str
   }
 }
 
-/*! @__NO_SIDE_EFFECTS__ */
+/** @since 3.0.0 */
+/* @__NO_SIDE_EFFECTS__ */
 export const defineNuxtComponent: typeof defineComponent =
   function defineNuxtComponent (...args: any[]): any {
     const [options, key] = args
@@ -37,7 +38,7 @@ export const defineNuxtComponent: typeof defineComponent =
     if (!setup && !options.asyncData && !options.head) {
       return {
         [NuxtComponentIndicator]: true,
-        ...options
+        ...options,
       }
     }
 
@@ -65,6 +66,6 @@ export const defineNuxtComponent: typeof defineComponent =
           .finally(() => {
             promises.length = 0
           })
-      }
+      },
     } as DefineComponent
   }
